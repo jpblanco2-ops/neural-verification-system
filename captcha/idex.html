@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Neural Verification System</title>
+  <style>
+    body {
+      margin: 0;
+      background: black;
+      color: #00ff1e;
+      font-family: monospace;
+      overflow: hidden;
+    }
+
+    #bootScreen {
+      position: fixed;
+      width: 100%;
+      height: 100%;
+      background: black;
+      padding: 20px;
+      font-size: 14px;
+      white-space: pre-line;
+    }
+
+    #mainUI {
+      display: none;
+      height: 100vh;
+      position: relative;
+    }
+
+    .recaptcha-box {
+      border: 1px solid #04ff00;
+      padding: 10px;
+      cursor: pointer;
+      display: flex;
+      justify-content: space-between;
+      width: 200px;
+      position: absolute;
+    }
+
+    .checkbox-box {
+      width: 20px;
+      height: 20px;
+      border: 1px solid #00ff04;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      margin-right: 10px;
+    }
+
+    #captchaModal {
+      display: none;
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      border: 1px solid #15ff00;
+      padding: 20px;
+      background: black;
+    }
+
+    #grid {
+      display: grid;
+      grid-template-columns: repeat(3, 90px);
+      gap: 10px;
+    }
+
+    img {
+      width: 90px;
+      height: 90px;
+      cursor: pointer;
+      border: 2px solid transparent;
+    }
+
+    img.selected {
+      border: 2px solid #00ff0d;
+    }
+
+    #scan {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(transparent, rgba(0, 255, 0, 0.2), transparent);
+      animation: scan 2s infinite;
+    }
+
+    @keyframes scan {
+      0% {transform: translateY(-100%);}
+      100% {transform: translateY(100%);}
+    }
+
+    /* JUMPSCARE */
+    #jumpscare {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: black;
+      justify-content: center;
+      align-items: center;
+      z-index: 9999;
+    }
+
+    #jumpscare img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+  </style>
+</head>
+<body>
+
+<div id="bootScreen"></div>
+
+<div id="mainUI">
+  <div class="card">
+    <div class="recaptcha-box" onclick="openCaptcha()">
+      <div>
+        <span class="checkbox-box" id="checkboxBox"></span>
+        I'm not a robot
+      </div>
+      ⚡
+    </div>
+    <p id="status"></p>
+  </div>
+</div>
+
+<div id="captchaModal">
+  <div id="scan"></div>
+  <h3 id="prompt"></h3>
+  <p id="timer"></p>
+  <p id="confidence"></p>
+
+  <div id="grid"></div>
+
+  <button onclick="verifySelection()">VERIFY</button>
+  <button onclick="generateGrid()">REFRESH</button>
+
+  <p id="analyzing"></p>
+</div>
+
+<!-- JUMPSCARE -->
+<div id="jumpscare">
+  <img src="img/king-von-piracy.gif">
+  <audio id="jumpscareSound" src="audio/king-von-anti-piracy-made-with-Voicemod.mp3"></audio>
+</div>
+
+<audio id="typeSound" src="audio/didgit-quickhack-made-with-Voicemod.mp3"></audio>
+<audio id="clickSound" src="audio/minecraft---menu-click-2-made-with-Voicemod.mp3"></audio>
+<audio id="successSound" src="audio/waapp---yeah!-made-with-Voicemod.mp3"></audio>
+
+<script>
+let failCount = localStorage.getItem("failCount") 
+  ? parseInt(localStorage.getItem("failCount")) 
+  : 0;
+
+const bootText = [
+  "Initializing system...",
+  "Scanning device...",
+  "Loading neural network...",
+  "Establishing secure connection...",
+  "Launching verification module..."
+];
+
+let bootIndex = 0;
+
+function typeBoot() {
+  if (bootIndex < bootText.length) {
+    document.getElementById("bootScreen").innerText += bootText[bootIndex] + "\n";
+    document.getElementById("typeSound").play();
+    bootIndex++;
+    setTimeout(typeBoot, 800);
+  } else {
+    setTimeout(() => {
+      document.getElementById("bootScreen").style.display = "none";
+      document.getElementById("mainUI").style.display = "block";
+      startFloatingBox();
+    }, 1000);
+  }
+}
+
+typeBoot();
+
+const emotions = ["happy","angry","sad","surprised","freak"];
+
+const imageMap = {
+  happy:["happy1.jpg","happy2.jpg","happy3.jpg","happy4.jpg","happy5.jpg","happy6.jpg"],
+  angry:["angry1.jpg","angry2.jpg","angry3.jpg","angry4.jpg","angry5.jpg","angry6.jpg"],
+  sad:["sad1.jpg","sad2.jpg","sad3.jpg","sad4.jpg","sad5.jpg","sad6.jpg"],
+  surprised:["surprised1.jpg","surprised2.jpg","surprised3.jpg","surprised4.jpg","surprised5.jpg"],
+  freak:["freak1.jpg","freak2.jpg","freak3.jpg","freak4.jpg","freak5.jpg","freak6.jpg"]
+};
+
+let targetEmotion;
+let timer;
+let timeLeft = 10;
+let captchaPassed = false;
+let difficulty = 10;
+
+function triggerJumpscare(){
+  const scare = document.getElementById("jumpscare");
+  const sound = document.getElementById("jumpscareSound");
+
+  scare.style.display = "flex";
+  sound.play();
+
+  localStorage.setItem("failCount", 0);
+}
+
+function openCaptcha(){
+  if(captchaPassed) return;
+  document.getElementById("clickSound").play();
+  document.getElementById("captchaModal").style.display="block";
+  startCaptcha();
+}
+
+function startCaptcha(){
+  targetEmotion = emotions[Math.floor(Math.random()*emotions.length)];
+  document.getElementById("prompt").innerText="Identify: "+targetEmotion;
+  generateGrid();
+  startTimer();
+}
+
+function startTimer(){
+  clearInterval(timer);
+  timeLeft = difficulty;
+  document.getElementById("timer").innerText="Time: "+timeLeft;
+
+  timer=setInterval(()=>{
+    timeLeft--;
+    document.getElementById("timer").innerText="Time: "+timeLeft;
+
+    if(timeLeft<=0 && !captchaPassed){
+      clearInterval(timer);
+      difficulty = Math.max(5, difficulty-1);
+
+      failCount++;
+      localStorage.setItem("failCount", failCount);
+
+      if (failCount >= 4){
+        triggerJumpscare();
+      } else {
+        alert("BOT DETECTED");
+        location.reload();
+      }
+    }
+  },1000);
+}
+
+function generateGrid(){
+  const grid=document.getElementById("grid");
+  grid.innerHTML="";
+
+  let all=[];
+
+  emotions.forEach(e=>{
+    imageMap[e].forEach(img=>{
+      all.push({emotion:e,src:"img/"+img});
+    });
+  });
+
+  all.sort(()=>Math.random()-0.5);
+  const selected=all.slice(0,9);
+
+  selected.forEach(item=>{
+    const img=document.createElement("img");
+    img.src=item.src;
+    img.dataset.emotion=item.emotion;
+
+    img.onclick=()=>{
+      document.getElementById("clickSound").play();
+      img.classList.toggle("selected");
+    };
+
+    grid.appendChild(img);
+  });
+}
+
+function verifySelection(){
+  const selected=document.querySelectorAll(".selected");
+
+  document.getElementById("analyzing").innerText="Analyzing neural patterns...";
+
+  setTimeout(()=>{
+    let correct=true;
+
+    selected.forEach(img=>{
+      if(img.dataset.emotion!==targetEmotion){
+        correct=false;
+      }
+    });
+
+    const confidence = Math.floor(Math.random()*40)+60;
+    document.getElementById("confidence").innerText=
+      "AI Confidence: "+confidence+"%";
+
+    if(correct){
+      captchaPassed=true;
+      clearInterval(timer);
+
+      document.getElementById("successSound").play();
+      document.getElementById("checkboxBox").innerHTML="✔";
+      document.getElementById("status").innerText="ACCESS GRANTED";
+
+      document.getElementById("captchaModal").style.display="none";
+    } else {
+      difficulty = Math.max(5, difficulty-1);
+
+      failCount++;
+      localStorage.setItem("failCount", failCount);
+
+      if (failCount >= 4){
+        triggerJumpscare();
+      } else {
+        alert("VERIFICATION FAILED");
+        location.reload();
+      }
+    }
+  },1500);
+}
+
+function startFloatingBox(){
+  const box = document.querySelector(".recaptcha-box");
+
+  let x = 100;
+  let y = 100;
+  let dx = 2;
+  let dy = 2;
+
+  function moveBox(){
+    const rect = box.getBoundingClientRect();
+
+    x += dx;
+    y += dy;
+
+    if (x + rect.width >= window.innerWidth || x <= 0){
+      dx *= -1;
+    }
+
+    if (y + rect.height >= window.innerHeight || y <= 0){
+      dy *= -1;
+    }
+
+    box.style.left = x + "px";
+    box.style.top = y + "px";
+
+    requestAnimationFrame(moveBox);
+  }
+
+  moveBox();
+}
+</script>
+
+</body>
+</html>
